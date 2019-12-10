@@ -876,6 +876,9 @@ local usage-requirements =
 	<toolset>msvc:<define>_SCL_SECURE_NO_DEPRECATE
 	<toolset>msvc:<define>_CRT_SECURE_NO_DEPRECATE
 
+	# https://github.com/chriskohlhoff/asio/issues/290#issuecomment-377727614
+	<define>_SILENCE_CXX17_ALLOCATOR_VOID_DEPRECATION_WARNING
+
 	<cxxflags>$(CXXFLAGS)
 	<linkflags>$(LDFLAGS)
 	;
@@ -894,9 +897,6 @@ lib torrent
 	<link>shared:<define>TORRENT_BUILDING_SHARED
 	<define>BOOST_NO_DEPRECATED
 	<link>shared:<define>BOOST_SYSTEM_SOURCE
-
-	# https://github.com/chriskohlhoff/asio/issues/290#issuecomment-377727614
-	<define>_SILENCE_CXX17_ALLOCATOR_VOID_DEPRECATION_WARNING
 
 	<dht>on:<source>src/kademlia/$(KADEMLIA_SOURCES).cpp
 	<dht>on:<source>src/ed25519/$(ED25519_SOURCES).cpp
