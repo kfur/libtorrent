@@ -5,7 +5,6 @@
       "buildenv": "bionic-amd64",
       "builddeps": ["build-essential", "libssl-dev", "curl", "clang-5.0", "ca-certificates"],
       "buildcmd": [
-        "sudo chmod 755 /etc/ssl/certs/ca-certificates.crt",
         "clang++-5.0 --version",
         "curl -LsS https://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.gz | tar xz",
         "(cd boost_1_68_0 && ./bootstrap.sh)",
