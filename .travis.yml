@@ -139,7 +139,7 @@ install:
       echo "using gcc : coverage : ccache g++-7 --coverage : <linkflags>--coverage ;" >> ~/user-config.jam;
     fi'
   - 'if [[ $toolset == "gcc-arm" ]]; then
-      echo "using gcc : arm : ccache armv8l-linux-gnueabihf-g++ :
+      echo "using gcc : arm : ccache arm-linux-gnueabihf-g++ :
         <cxxflags>-Wno-psabi
         <cxxflags>-fsigned-char
         <cxxflags>-march=armv8-a+crc
@@ -206,10 +206,10 @@ install:
 
   - 'if [[ "$arch" == "arm" ]]; then
       cd $TRAVIS_BUILD_DIR/test;
-      wget --quiet -O gcc-linaro.tar.xz https://releases.linaro.org/components/toolchain/binaries/7.5-2019.12/armv8l-linux-gnueabihf/gcc-linaro-7.5.0-2019.12-x86_64_armv8l-linux-gnueabihf.tar.xz;
-      tar xf gcc-linaro.tar.xz;
-      export PATH=${PWD}/gcc-linaro-7.5.0-2019.12-x86_64_armv8l-linux-gnueabihf/bin:${PATH};
-      armv8l-linux-gnueabihf-g++ --version;
+      wget --quiet -O gcc.tar.xz https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.11/gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf.tar.xz
+      tar xf gcc.tar.xz;
+      export PATH=${PWD}/gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf/bin:${PATH};
+      arm-linux-gnueabihf-g++ --version;
       travis_retry sudo apt-get install -y qemu-user-static;
       wget --quiet -O ubuntu-base.tar.gz http://cdimage.ubuntu.com/ubuntu-base/releases/14.04/release/ubuntu-base-14.04.5-base-armhf.tar.gz;
       sudo mkdir rootfs;
