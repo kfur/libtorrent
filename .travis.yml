@@ -4,47 +4,47 @@ dist: bionic
 matrix:
   fast_finish: true
   include:
-    - if: repo = arvidn/libtorrent
-      env: variant=release sonar_scan=1 toolset=gcc check_headers=1
-    - env: variant=test_debug crypto=openssl tests=1 examples=1 tools=1 toolset=darwin
-      os: osx
-      osx_image: xcode11.2
-    - env: variant=test_debug crypto=openssl docs=1 python=1 toolset=darwin ios=1
-      os: osx
-      osx_image: xcode11.2
-    - env: variant=debug toolset=gcc lint=1 pylint=1 clang_tidy=1
-      addons:
-        apt:
-          sources:
-          - ubuntu-toolchain-r-test
-          packages:
-          - python3-pip
-          - g++-7
-    - env: variant=test_debug tests=1 toolset=gcc sanitizer=on fuzzers=1
-    - env: variant=test_debug tests=1 mmap=off toolset=gcc
-    - env: variant=test_debug sim=1 crypto=openssl toolset=gcc sanitizer=on
-    - env: variant=test_debug tests=1 crypto=wolfssl toolset=gcc sanitizer=on
-    - env: variant=test_release coverage=1 tests=1 toolset=gcc-coverage python=1 python_dist=1
-    - env: dist=1 toolset=gcc install_boost=1
-      addons:
-        apt:
-          sources:
-          - ubuntu-toolchain-r-test
-          packages:
-          - python-docutils
-          - python-pygments
-          - python-pil
-          - python-aafigure
-          - graphviz
-          - g++-7
-    - env: cmake=1 toolset=gcc install_boost=1
-      addons:
-        apt:
-          sources:
-          - ubuntu-toolchain-r-test
-          packages:
-          - ninja-build
-          - g++-7
+#    - if: repo = arvidn/libtorrent
+#      env: variant=release sonar_scan=1 toolset=gcc check_headers=1
+#    - env: variant=test_debug crypto=openssl tests=1 examples=1 tools=1 toolset=darwin
+#      os: osx
+#      osx_image: xcode11.2
+#    - env: variant=test_debug crypto=openssl docs=1 python=1 toolset=darwin ios=1
+#      os: osx
+#      osx_image: xcode11.2
+#    - env: variant=debug toolset=gcc lint=1 pylint=1 clang_tidy=1
+#      addons:
+#        apt:
+#          sources:
+#          - ubuntu-toolchain-r-test
+#          packages:
+#          - python3-pip
+#          - g++-7
+#    - env: variant=test_debug tests=1 toolset=gcc sanitizer=on fuzzers=1
+#    - env: variant=test_debug tests=1 mmap=off toolset=gcc
+#    - env: variant=test_debug sim=1 crypto=openssl toolset=gcc sanitizer=on
+#    - env: variant=test_debug tests=1 crypto=wolfssl toolset=gcc sanitizer=on
+#    - env: variant=test_release coverage=1 tests=1 toolset=gcc-coverage python=1 python_dist=1
+#    - env: dist=1 toolset=gcc install_boost=1
+#      addons:
+#        apt:
+#          sources:
+#          - ubuntu-toolchain-r-test
+#          packages:
+#          - python-docutils
+#          - python-pygments
+#          - python-pil
+#          - python-aafigure
+#          - graphviz
+#          - g++-7
+#    - env: cmake=1 toolset=gcc install_boost=1
+#      addons:
+#        apt:
+#          sources:
+#          - ubuntu-toolchain-r-test
+#          packages:
+#          - ninja-build
+#          - g++-7
     - env: arch=arm toolset=gcc-arm
 
 notifications:
@@ -208,8 +208,11 @@ install:
       cd $TRAVIS_BUILD_DIR/test;
       wget --quiet -O gcc.tar.xz https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.11/gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf.tar.xz
       tar xf gcc.tar.xz;
-      export PATH=${PWD}/gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf/bin:${PATH};
+      ls -la gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf;
+      ls -la gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf/bin;
+      export PATH=$PWD/gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf/bin:$PATH;
       arm-linux-gnueabihf-g++ --version;
+      ./gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf/bin/arm-linux-gnueabihf-g++ --version;
       travis_retry sudo apt-get install -y qemu-user-static;
       wget --quiet -O ubuntu-base.tar.gz http://cdimage.ubuntu.com/ubuntu-base/releases/14.04/release/ubuntu-base-14.04.5-base-armhf.tar.gz;
       sudo mkdir rootfs;
