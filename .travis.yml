@@ -207,7 +207,7 @@ install:
   - 'if [[ "$arch" == "arm" ]]; then
       cd $TRAVIS_BUILD_DIR/test;
       wget --quiet -O gcc.tar.xz https://developer.arm.com/-/media/Files/downloads/gnu-a/8.2-2018.11/gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf.tar.xz
-      tar xf gcc.tar.xz;
+      tar xvf gcc.tar.xz;
       ls -la .;
       ls -la gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf;
       ls -la gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf/bin;
