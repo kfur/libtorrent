@@ -212,7 +212,7 @@ install:
       arm-linux-gnueabihf-g++ --version;
       ./gcc-arm-8.2-2018.11-x86_64-arm-linux-gnueabihf/bin/arm-linux-gnueabihf-g++ --version;
       travis_retry sudo apt-get install -y qemu-user-static;
-      wget --quiet -O ubuntu-base.tar.gz http://cdimage.ubuntu.com/ubuntu-base/releases/18.04/release/ubuntu-base-18.04.3-base-armhf.tar.gz;
+      wget --quiet -O ubuntu-base.tar.gz http://cdimage.ubuntu.com/ubuntu-base/releases/19.04/release/ubuntu-base-19.04-base-armhf.tar.gz;
       sudo mkdir rootfs;
       sudo tar xf ubuntu-base.tar.gz -C rootfs;
       sudo cp /usr/bin/qemu-arm-static rootfs/usr/bin/;
