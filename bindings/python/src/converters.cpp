@@ -29,7 +29,22 @@
 using namespace boost::python;
 namespace bp = boost::python;
 
-template<class T>
+typedef std::vector<char> vector_char;
+
+template <typename T>
+struct type_into_python
+{
+    static PyObject* convert(T const&);
+};
+
+template <>
+PyObject* type_into_python<vector_char>::convert(vector_char const& ba)
+{
+    const char* src = ba.empty() ? "" : ba.data();
+    return PyBytes_FromStringAndSize(src, ba.size());
+}
+
+template <class T>
 struct endpoint_to_tuple
 {
     static PyObject* convert(T const& ep)
@@ -397,6 +412,12 @@ void bind_converters()
     to_python_converter<std::vector<lt::sha1_hash>, vector_to_list<std::vector<lt::sha1_hash>>>();
     to_python_converter<std::vector<std::string>, vector_to_list<std::vector<std::string>>>();
     to_python_converter<std::vector<int>, vector_to_list<std::vector<int>>>();
+
+    to_python_converter<vector_char, type_into_python<vector_char>>();
+    to_python_converter<std::vector<std::pair<std::string, std::pair<std::uint64_t, std::uint64_t>>>, vector_to_list<std::vector<std::pair<std::string, std::pair<std::uint64_t, std::uint64_t>>>>>();
+    to_python_converter<std::pair<std::string, std::pair<std::uint64_t, std::uint64_t>>, pair_to_tuple<std::string, std::pair<std::uint64_t, std::uint64_t>>>();
+    to_python_converter<std::pair<std::uint64_t, std::uint64_t>, pair_to_tuple<std::uint64_t, std::uint64_t>>();
+
     to_python_converter<std::vector<lt::download_priority_t>, vector_to_list<std::vector<lt::download_priority_t>>>();
     to_python_converter<std::vector<lt::tcp::endpoint>, vector_to_list<std::vector<lt::tcp::endpoint>>>();
     to_python_converter<std::vector<lt::udp::endpoint>, vector_to_list<std::vector<lt::udp::endpoint>>>();

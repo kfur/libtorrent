@@ -38,6 +38,8 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <mutex>
 #include <atomic>
 #include <memory>
+#include <map>
+#include <vector>
 
 #include "libtorrent/fwd.hpp"
 #include "libtorrent/aux_/disk_job_fence.hpp"
@@ -277,7 +279,7 @@ namespace libtorrent {
 		virtual ~storage_interface() {}
 
 		// initialized in disk_io_thread::perform_async_job
-		aux::session_settings* m_settings = nullptr;
+		aux::session_settings const* m_settings = nullptr;
 
 		storage_index_t storage_index() const { return m_storage_index; }
 		void set_storage_index(storage_index_t st) { m_storage_index = st; }
@@ -407,6 +409,50 @@ namespace libtorrent {
 
 		bool m_allocate_files;
 	};
+
+class TORRENT_EXPORT temp_storage : public storage_interface
+{
+public:
+    explicit temp_storage(file_storage const& fs);
+    virtual ~temp_storage();
+    void initialize(storage_error&) override;
+    bool has_any_file(storage_error&) override;
+    void set_file_priority(aux::vector<lt::download_priority_t, file_index_t>&
+            , storage_error&) override;
+    int readv(span<lt::iovec_t const> bufs, piece_index_t piece
+            , int offset, open_mode_t, storage_error&) override;
+    int writev(span<iovec_t const> bufs
+            , piece_index_t const piece, int offset, open_mode_t, storage_error&) override;
+     
+    void rename_file(file_index_t, std::string const&, storage_error&) override;
+    status_t move_storage(std::string const&
+            , move_flags_t, storage_error&) override;
+    bool verify_resume_data(add_torrent_params const&
+            , aux::vector<std::string, file_index_t> const&
+            , storage_error&) override;
+    void release_files(storage_error&) override;
+    void delete_files(remove_flags_t, storage_error&) override;
+    std::vector<char> next_piece();
+    void set_torrent_handle(lt::torrent_handle &th);
+
+    std::map<piece_index_t, std::vector<char>> m_file_data;
+    std::mutex m;
+    lt::torrent_handle *th;
+    struct {
+	    std::uint32_t file_id;
+	    std::uint64_t size_sum;
+	    std::vector<char> last_piece_residual_data;
+    } last_file;
+
+    std::int64_t last_piece_num_read;
+    std::int64_t last_prioritized_piece;
+    std::uint64_t max_prioritized_piece_count;
+    std::uint64_t max_mem_footprint;
+    std::uint64_t sended_sum;
+    std::uint64_t prev_last_piece_residual_data_size;
+    std::uint64_t last_min_prioritized_piece;
+    std::mutex file_lock;
+};
 
 }
 

@@ -137,6 +137,8 @@ namespace libtorrent {
 	// the constructor function for the "zero" storage. This will always read
 	// zeroes and ignore all writes.
 	TORRENT_EXPORT storage_interface* zero_storage_constructor(storage_params const&, file_pool&);
+
+	TORRENT_EXPORT storage_interface* temp_storage_constructor(storage_params const& params, file_pool&);
 }
 
 #endif

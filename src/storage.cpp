@@ -40,6 +40,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <set>
 #include <functional>
 #include <cstdio>
+#include <iostream>
+#include <map>
+#include <vector>
 
 #include "libtorrent/aux_/disable_warnings_push.hpp"
 
@@ -877,3 +880,222 @@ namespace {
 	}
 
 } // namespace libtorrent
+
+namespace libtorrent {
+
+    temp_storage::temp_storage(file_storage const& fs) : 
+	    storage_interface(fs), 
+	    last_piece_num_read(-1), 
+	    last_prioritized_piece(-1), 
+	    max_prioritized_piece_count(0), 
+	    max_mem_footprint(20){
+	    this->th = new lt::torrent_handle;
+	    this->last_file.file_id = 0;
+	    this->last_file.size_sum = 0;
+	    this->sended_sum = 0;
+	    this->prev_last_piece_residual_data_size = 0;
+	    this->last_min_prioritized_piece = 0;
+    }
+    temp_storage::~temp_storage() {
+	    delete this->th;
+	    //printf("Free temp storage\n");
+    }
+    void temp_storage::initialize(storage_error&) {}
+    bool temp_storage::has_any_file(storage_error&) { return false; }
+    void temp_storage::set_file_priority(aux::vector<download_priority_t, file_index_t>&
+            , storage_error&) {}
+    int temp_storage::readv(span<iovec_t const> bufs, piece_index_t piece
+            , int offset, open_mode_t, storage_error&)
+    {
+	std::unique_lock<std::mutex> l(this->file_lock);
+        auto const i = m_file_data.find(piece);
+        if (i == m_file_data.end()) return 0;
+        if (int(i->second.size()) <= offset) return 0;
+        iovec_t data{ i->second.data() + offset, int(i->second.size() - offset) };
+        int ret = 0;
+        for (lt::iovec_t const& b : bufs) {
+            int const to_copy = std::min(int(b.size()), int(data.size()));
+            memcpy(b.data(), data.data(), to_copy);
+            data = data.subspan(to_copy);
+            ret += to_copy;
+            if (data.empty()) break;
+        }
+        return ret;
+    }
+    int temp_storage::writev(span<iovec_t const> bufs
+            , lt::piece_index_t const piece, int offset, lt::open_mode_t, lt::storage_error&)
+    {
+	std::unique_lock<std::mutex> l(this->file_lock);
+        auto& data = m_file_data[piece];
+        int ret = 0;
+        for (auto& b : bufs) {
+            if (int(data.size()) < offset + b.size()) data.resize(offset + b.size());
+            std::memcpy(data.data() + offset, b.data(), b.size());
+            offset += int(b.size());
+            ret += int(b.size());
+        }
+        return ret;
+    }
+    void temp_storage::rename_file(lt::file_index_t, std::string const&, lt::storage_error&) { assert(false); }
+    lt::status_t temp_storage::move_storage(std::string const&
+            , lt::move_flags_t, lt::storage_error&) { return lt::status_t::no_error; }
+    bool temp_storage::verify_resume_data(lt::add_torrent_params const&
+            , lt::aux::vector<std::string, lt::file_index_t> const&
+            , lt::storage_error&) { return false; }
+    void temp_storage::release_files(lt::storage_error&) {}
+    void temp_storage::delete_files(lt::remove_flags_t, lt::storage_error&) {}
+
+    void temp_storage::set_torrent_handle(lt::torrent_handle &th) {
+	*(this->th) = th;
+    }
+
+    std::vector<char> temp_storage::next_piece() {
+	std::unique_lock<std::mutex> l(this->file_lock);
+	
+	if (this->last_file.last_piece_residual_data.size() != 0) {
+		// have part of last piece that should be sent first
+		std::vector<char> piece;
+		if ((this->last_file.file_id+1 < this->th->get_torrent_info().num_files()) && 
+				(this->last_file.last_piece_residual_data.size() > this->th->get_torrent_info().begin_files()[this->last_file.file_id+1].size)) {
+			// piece contain part of next file
+			// so split piece
+			// example: next file is smaller than last_piece_residual_data
+			//printf("[temp_storage]: split last_piece_residual_data = %d ", last_file.last_piece_residual_data.size());
+			std::vector<char> new_last_piece_residual_data;
+			auto next_file_size = this->th->get_torrent_info().begin_files()[this->last_file.file_id+1].size;
+			auto piece_biter = this->last_file.last_piece_residual_data.begin();
+                	std::advance(piece_biter, next_file_size);
+                	std::copy(piece_biter, this->last_file.last_piece_residual_data.end(), std::back_inserter(new_last_piece_residual_data));
+                	std::copy_n(this->last_file.last_piece_residual_data.begin(), next_file_size, std::back_inserter(piece));
+			this->last_file.last_piece_residual_data = new_last_piece_residual_data;
+			//printf("[temp_storage]: to send piece size = %d  new_last_piece_residual_data = %d\n", piece.size(), new_last_piece_residual_data.size());
+		} 
+		else {
+			//printf("[temp_storage]: send last residual piece with size = %d\n", this->last_file.last_piece_residual_data.size());
+			piece = this->last_file.last_piece_residual_data;
+                	this->last_file.last_piece_residual_data = std::vector<char>{};
+		}
+		this->last_file.file_id += 1;
+		this->last_file.size_sum = piece.size();	
+		//printf("[temp_storage] file_id = %d  last_file.size_sum = %d\n", this->last_file.file_id, this->last_file.size_sum);
+		sended_sum += piece.size();
+		//printf("[temp_storage] sended_sum = %d\n", sended_sum);
+
+
+                return piece;
+        }
+	/*
+	if (this->m_file_data.find(this->last_piece_num_read+1)->first == 0) {
+		// widen pieces priorities to prevent stuck when file beginning being downloaded
+		int j = this->last_prioritized_piece;
+                for (; (j < this->th->get_torrent_info().num_pieces()) && (j <= this->last_piece_num_read+(this->max_prioritized_piece_count)*2); ++j) {
+                    this->th->piece_priority(j, 1);
+                }
+                this->last_min_prioritized_piece = j;
+		
+	}
+	*/
+	if (this->m_file_data.find(this->last_piece_num_read+1) == this->m_file_data.end()) {
+	    if (((this->last_prioritized_piece - this->last_piece_num_read+1) <= (this->max_prioritized_piece_count/2))) {
+		int j;
+	    	for (j = this->last_piece_num_read+1; (j < this->th->get_torrent_info().num_pieces()) && (j <= this->last_piece_num_read+this->max_prioritized_piece_count); ++j) {
+                    this->th->piece_priority(j, 3);
+            	}
+                this->last_prioritized_piece = j - 1;
+		/*
+		for (; (j < this->th->get_torrent_info().num_pieces()) && (j <= this->last_piece_num_read+(this->max_prioritized_piece_count)*2); ++j) {
+                    this->th->piece_priority(j, 1);
+                }
+		this->last_min_prioritized_piece = j;
+		*/
+	    }
+
+	    //printf("[temp_storage]: is_finished = %d\n", this->th->is_finished());
+
+            return std::vector<char>{};
+        }
+        auto piece_kv = this->m_file_data.find(last_piece_num_read+1);
+
+	if ((this->last_prioritized_piece - this->last_piece_num_read+1) <= (this->max_prioritized_piece_count/2)) {
+		// recalculate priorities for pieces
+		int j;
+		for (j = this->last_piece_num_read+1; (j < this->th->get_torrent_info().num_pieces()) && (j <= this->last_piece_num_read+this->max_prioritized_piece_count); ++j) {
+		    this->th->piece_priority(j, 3);
+		}
+		this->last_prioritized_piece = j - 1;
+		/*
+		for (; (j < this->th->get_torrent_info().num_pieces()) && (j <= this->last_piece_num_read+(this->max_prioritized_piece_count)*2); ++j) {
+		    this->th->piece_priority(j, 1);
+		}
+		this->last_min_prioritized_piece = j;
+		*/
+        }
+
+	if (this->last_piece_num_read+1 != piece_kv->first) 
+	{
+            //printf("[temp_storage]: Unorderrance occured, piece want %d, piece have %d\n", this->last_piece_num_read+1, piece_kv->first);
+	    if ((this->last_prioritized_piece - this->last_piece_num_read+1) <= (this->max_prioritized_piece_count/2)) {
+		int j;
+                for (j = this->last_piece_num_read+1; (j < this->th->get_torrent_info().num_pieces()) && (j <= this->last_piece_num_read+this->max_prioritized_piece_count); ++j) {
+                    this->th->piece_priority(j, 3);
+                }
+		this->last_prioritized_piece = j - 1;
+		/*
+		for (; (j < this->th->get_torrent_info().num_pieces()) && (j <= this->last_piece_num_read+(this->max_prioritized_piece_count)*2); ++j) {
+                    this->th->piece_priority(j, 1);
+                }
+		this->last_min_prioritized_piece = j;
+		*/
+
+            }
+            return std::vector<char>{};
+        }
+
+	//if (this->th->get_torrent_info().piece_size(piece_kv->first) > piece_kv->second.size()) {
+	if (this->th->have_piece(piece_kv->first) == false) {
+		//printf("[temp_storage]: Wrong piece size %d want %d  have %d \n", last_piece_num_read+1, this->th->get_torrent_info().piece_size(last_piece_num_read+1), piece_kv->second.size());
+		
+	    //printf("[temp_storage]: is_finished = %d\n", this->th->is_finished());
+	    if (this->th->is_finished()) {
+		    //printf("[temp_storage]: prev piece size %d\n", this->m_file_data.find(last_piece_num_read)->second.size());
+	    }
+
+            return std::vector<char>{};
+	}
+	
+	this->last_piece_num_read = piece_kv->first;
+	std::vector<char> piece;
+	auto current_file_size = this->th->get_torrent_info().begin_files()[this->last_file.file_id].size;
+
+	if (this->last_file.size_sum + piece_kv->second.size() > current_file_size) {
+		//printf("[temp_storage]: current_file_size = %d  this->last_file.size_sum=%d piece_kv->second.size()= %d\n", current_file_size, this->last_file.size_sum, piece_kv->second.size());
+
+		int diff = this->last_file.size_sum + piece_kv->second.size() - current_file_size; //+ this->prev_last_piece_residual_data_size;
+		//printf("[temp_storage]: data overflow, diff = %d\n", diff);
+		auto piece_biter = piece_kv->second.begin();
+		std::advance(piece_biter, piece_kv->second.size() - diff);
+		std::copy(piece_biter, piece_kv->second.end(), std::back_inserter(this->last_file.last_piece_residual_data));
+		std::copy_n(piece_kv->second.begin(), current_file_size - this->last_file.size_sum - this->prev_last_piece_residual_data_size, std::back_inserter(piece));
+		//printf("[temp_storage]: piece size = %d; to send piece size = %d; last_piece_residual_data size = %d\n", piece_kv->second.size(), piece.size(), this->last_file.last_piece_residual_data.size());
+	}
+	else {
+		piece = piece_kv->second;
+	}
+	
+	this->last_file.size_sum += piece.size();
+	//piece_kv->second = std::vector<char>{};
+	this->m_file_data[piece_kv->first] = std::vector<char>{};
+
+	//printf("[temp_storage]: piece num = %d\n", piece_kv->first);
+	sended_sum += piece.size();
+        //printf("[temp_storage]: sended sum = %d\n", sended_sum);
+	//printf("[temp_storage]: current file size sum = %d\n", this->last_file.size_sum);
+        return piece;
+    }
+
+lt::storage_interface* temp_storage_constructor(lt::storage_params const& params, lt::file_pool&)
+{
+    return new temp_storage(params.files);
+}
+
+}

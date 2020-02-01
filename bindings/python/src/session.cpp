@@ -5,6 +5,7 @@
 #include "boost_python.hpp"
 #include <list>
 #include <string>
+#include <vector>
 #include <libtorrent/session.hpp>
 #include <libtorrent/storage.hpp>
 #include <libtorrent/error_code.hpp>
@@ -354,14 +355,24 @@ namespace
     {
         add_torrent_params p;
         dict_to_add_torrent_params(params, p);
-
-        allow_threading_guard guard;
+	p.storage = temp_storage_constructor;
+	p.max_uploads = 0;
+	p.upload_limit = 0;
+    allow_threading_guard guard;
 
 #ifndef BOOST_NO_EXCEPTIONS
-        return s.add_torrent(p);
+	torrent_handle th = s.add_torrent(p);
+	th.set_sequential_download(true);
+	temp_storage* ts = dynamic_cast<temp_storage*>(th.get_storage_impl());
+	ts->set_torrent_handle(th);
+	return th;
 #else
         error_code ec;
-        return s.add_torrent(p, ec);
+	torrent_handle th = s.add_torrent(p, ec);
+	th.set_sequential_download(true);
+	temp_storage* ts = dynamic_cast<temp_storage*>(th.get_storage_impl());
+	ts->set_torrent_handle(th);
+        return th
 #endif
     }
 

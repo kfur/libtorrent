@@ -15,6 +15,8 @@
 #include <libtorrent/disk_interface.hpp>
 #include "gil.hpp"
 
+#include <cmath>
+
 using namespace boost::python;
 using namespace lt;
 
@@ -175,6 +177,72 @@ list file_priorities(torrent_handle& handle)
         ret.append(p);
 
     return ret;
+}
+
+std::vector<std::pair<std::string, std::pair<std::uint64_t, std::uint64_t>>> files_with_offset(torrent_handle& handle)
+{
+    std::vector<std::pair<std::string, std::pair<std::uint64_t, std::uint64_t>>> files_with_offset;
+    std::uint64_t total_size = 0;
+    for (int i = 0; i < handle.get_torrent_info().num_files(); i++) {
+        auto& f = handle.get_torrent_info().begin_files()[i];
+        total_size += f.size;
+        auto file_num_piece = std::uint64_t(std::ceil(double(total_size) / handle.get_torrent_info().piece_length()));
+
+        if (i != 0) {
+            //auto& prev_f = handle.get_torrent_info().begin_files()[i-1];
+            auto prev_file_num_piece = double(total_size - f.size) / handle.get_torrent_info().piece_length();
+            double intpart;
+            if (modf(prev_file_num_piece, &intpart) != .0) {
+                file_num_piece++;
+            }
+
+            for (auto& fo : files_with_offset) {
+                file_num_piece -= fo.second.first;
+            }
+        }
+        files_with_offset.push_back(std::make_pair(static_cast<std::string>(f.filename()), std::make_pair(file_num_piece, f.size)));
+    }
+    return files_with_offset;
+}
+
+void prepare_pieces_priority(torrent_handle& handle)
+{
+    temp_storage* ts = dynamic_cast<temp_storage*>(handle.get_storage_impl());
+    int j = 0;
+    for (j = 0; (j < handle.get_torrent_info().num_pieces()) && (j <= ts->max_prioritized_piece_count); ++j) {
+        handle.piece_priority(j, 7);
+    }
+    ts->last_prioritized_piece = j - 1;
+
+    for (; j < handle.get_torrent_info().num_pieces(); j++) {
+        handle.piece_priority(j, 0);
+    }
+}
+
+int piece_size(torrent_handle& handle)
+{
+    return handle.get_torrent_info().piece_length();
+}
+
+std::int64_t total_size(torrent_handle& handle)
+{
+    return handle.get_torrent_info().total_size();
+}
+
+std::vector<char> next_piece(lt::torrent_handle& th)
+{
+    //printf("next piece\n");
+    temp_storage* ts = dynamic_cast<temp_storage*>(th.get_storage_impl());
+    return ts->next_piece();
+}
+
+void calc_prioritized_piece_count(lt::torrent_handle& th)
+{
+    //printf("calc_prioritized_piece_count\n");
+    temp_storage* ts = dynamic_cast<temp_storage*>(th.get_storage_impl());
+    ts->set_torrent_handle(th);
+    ts->max_prioritized_piece_count = std::uint64_t(ts->max_mem_footprint / (double(ts->th->get_torrent_info().piece_length()) / (1024 * 1024)));
+    //printf("Max prior piece count %d\n", ts->max_prioritized_piece_count);
 }
 
 download_priority_t file_prioritity0(torrent_handle& h, file_index_t index)
@@ -506,6 +574,12 @@ void bind_torrent_handle()
         .def("get_piece_priorities", &piece_priorities)
         .def("prioritize_files", &prioritize_files)
         .def("get_file_priorities", &file_priorities)
+        .def("files", &files_with_offset)
+        .def("prepare_pieces_priority", &prepare_pieces_priority)
+        .def("piece_size", &piece_size)
+        .def("total_size", &total_size)
+        .def("next_piece", &next_piece)
+        .def("calc_prioritized_piece_count", &calc_prioritized_piece_count)
         .def("file_priority", &file_prioritity0)
         .def("file_priority", &file_prioritity1)
         .def("file_status", _(file_status0))
